@@ -74,6 +74,9 @@ public class AccessPointPreference extends Preference {
     private AccessPoint mAccessPoint;
     private Drawable mBadge;
     private int mLevel;
+    private int mWifiGeneration;
+    private boolean mTwtSupport;
+    private boolean mVhtMax8SpatialStreamsSupport;
     private CharSequence mContentDescription;
     private int mDefaultIconResId;
     private int mWifiSpeed = Speed.NONE;
@@ -174,14 +177,14 @@ public class AccessPointPreference extends Preference {
         notifyChanged();
     }
 
-    protected void updateIcon(int level, Context context) {
+    protected void updateIcon(int level, int generation, boolean isReady, Context context) {
         if (level == -1) {
             safeSetDefaultIcon();
             return;
         }
         TronUtils.logWifiSettingsSpeed(context, mWifiSpeed);
 
-        Drawable drawable = mIconInjector.getIcon(level);
+        Drawable drawable = mIconInjector.getIcon(level, generation, isReady);
         if (!mForSavedNetworks && drawable != null) {
             drawable.setTintList(Utils.getColorAttr(context, android.R.attr.colorControlNormal));
             setIcon(drawable);
@@ -236,17 +239,36 @@ public class AccessPointPreference extends Preference {
         final Context context = getContext();
         int level = mAccessPoint.getLevel();
         int wifiSpeed = mAccessPoint.getSpeed();
-        if (level != mLevel || wifiSpeed != mWifiSpeed) {
+        int wifiGeneration = mAccessPoint.getWifiGeneration();
+        boolean vhtMax8SpatialStreamsSupport = mAccessPoint.isVhtMax8SpatialStreamsSupported();
+        boolean twtSupport = mAccessPoint.isTwtSupported();
+
+        if (level != mLevel ||
+            wifiSpeed != mWifiSpeed ||
+            wifiGeneration != mWifiGeneration ||
+            mVhtMax8SpatialStreamsSupport != vhtMax8SpatialStreamsSupport ||
+            mTwtSupport != twtSupport) {
             mLevel = level;
             mWifiSpeed = wifiSpeed;
-            updateIcon(mLevel, context);
+            mWifiGeneration = wifiGeneration;
+            mVhtMax8SpatialStreamsSupport = vhtMax8SpatialStreamsSupport;
+            mTwtSupport = twtSupport;
+            updateIcon(mLevel, mWifiGeneration, mVhtMax8SpatialStreamsSupport &&  mTwtSupport, context);
             notifyChanged();
         }
 
         updateBadge(context);
 
-        setSummary(mForSavedNetworks ? mAccessPoint.getSavedNetworkSummary()
-                : mAccessPoint.getSettingsSummary());
+        String summary = mForSavedNetworks ? mAccessPoint.getSavedNetworkSummary()
+                                           : mAccessPoint.getSettingsSummary();
+
+        if (mAccessPoint.getSecurity() == AccessPoint.SECURITY_SAE) {
+           summary = "WPA3(SAE) " + summary;
+        } else if (mAccessPoint.getSecurity() == AccessPoint.SECURITY_OWE) {
+           summary = "WPA3(OWE) " + summary;
+        }
+
+        setSummary(summary);
 
         mContentDescription = buildContentDescription(getContext(), this /* pref */, mAccessPoint);
     }
@@ -330,8 +352,8 @@ public class AccessPointPreference extends Preference {
             mContext = context;
         }
 
-        public Drawable getIcon(int level) {
-            return mContext.getDrawable(Utils.getWifiIconResource(level));
+        public Drawable getIcon(int level, int generation, boolean isReady) {
+            return mContext.getDrawable(Utils.getWifiIconResource(level, generation, isReady));
         }
     }
 }
